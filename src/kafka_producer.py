@@ -39,7 +39,6 @@ class KafkaPerformanceProducer:
                 'retries': 3,
                 'batch.size': 16384,
                 'linger.ms': 10,
-                'buffer.memory': 33554432,
                 **producer_config
             }
         elif KAFKA_PYTHON_AVAILABLE:
