@@ -5,9 +5,22 @@ import json
 import threading
 from datetime import datetime
 from typing import Dict, List, Optional, Callable
-from kafka import KafkaProducer
-from kafka.errors import KafkaError
 import uuid
+
+# Try confluent-kafka first, fallback to kafka-python
+try:
+    from confluent_kafka import Producer as ConfluentProducer
+    from confluent_kafka import KafkaError as ConfluentKafkaError
+    CONFLUENT_KAFKA_AVAILABLE = True
+except ImportError:
+    CONFLUENT_KAFKA_AVAILABLE = False
+
+try:
+    from kafka import KafkaProducer
+    from kafka.errors import KafkaError
+    KAFKA_PYTHON_AVAILABLE = True
+except ImportError:
+    KAFKA_PYTHON_AVAILABLE = False
 
 
 class KafkaPerformanceProducer:
@@ -16,17 +29,35 @@ class KafkaPerformanceProducer:
     def __init__(self, bootstrap_servers: str, topic: str, **producer_config):
         self.bootstrap_servers = bootstrap_servers
         self.topic = topic
-        self.producer_config = {
-            'bootstrap_servers': bootstrap_servers,
-            'value_serializer': lambda v: json.dumps(v).encode('utf-8'),
-            'key_serializer': lambda k: str(k).encode('utf-8') if k else None,
-            'acks': 'all',
-            'retries': 3,
-            'batch_size': 16384,
-            'linger_ms': 10,
-            'buffer_memory': 33554432,
-            **producer_config
-        }
+        
+        # Determine which Kafka client to use
+        if CONFLUENT_KAFKA_AVAILABLE:
+            self.client_type = 'confluent'
+            self.producer_config = {
+                'bootstrap.servers': bootstrap_servers,
+                'acks': 'all',
+                'retries': 3,
+                'batch.size': 16384,
+                'linger.ms': 10,
+                'buffer.memory': 33554432,
+                **producer_config
+            }
+        elif KAFKA_PYTHON_AVAILABLE:
+            self.client_type = 'kafka-python'
+            self.producer_config = {
+                'bootstrap_servers': bootstrap_servers,
+                'value_serializer': lambda v: json.dumps(v).encode('utf-8'),
+                'key_serializer': lambda k: str(k).encode('utf-8') if k else None,
+                'acks': 'all',
+                'retries': 3,
+                'batch_size': 16384,
+                'linger_ms': 10,
+                'buffer_memory': 33554432,
+                **producer_config
+            }
+        else:
+            raise ImportError("Neither confluent-kafka nor kafka-python is available")
+        
         self.producer = None
         self.stats = {
             'messages_sent': 0,
@@ -41,7 +72,10 @@ class KafkaPerformanceProducer:
     def connect(self):
         """Connect to Kafka cluster."""
         try:
-            self.producer = KafkaProducer(**self.producer_config)
+            if self.client_type == 'confluent':
+                self.producer = ConfluentProducer(self.producer_config)
+            else:  # kafka-python
+                self.producer = KafkaProducer(**self.producer_config)
             return True
         except Exception as e:
             print(f"Failed to connect to Kafka: {e}")
@@ -67,24 +101,34 @@ class KafkaPerformanceProducer:
                 'data': message
             }
             
-            future = self.producer.send(
-                self.topic,
-                value=enriched_message,
-                key=key
-            )
-            
-            # Wait for send to complete
-            record_metadata = future.get(timeout=10)
-            
-            self.stats['messages_sent'] += 1
-            self.stats['bytes_sent'] += len(json.dumps(enriched_message).encode('utf-8'))
+            if self.client_type == 'confluent':
+                # Confluent Kafka producer
+                message_json = json.dumps(enriched_message)
+                self.producer.produce(
+                    self.topic, 
+                    value=message_json.encode('utf-8'),
+                    key=key.encode('utf-8') if key else None
+                )
+                self.producer.flush()  # Wait for message to be sent
+                
+                self.stats['messages_sent'] += 1
+                self.stats['bytes_sent'] += len(message_json.encode('utf-8'))
+                
+            else:  # kafka-python
+                future = self.producer.send(
+                    self.topic,
+                    value=enriched_message,
+                    key=key
+                )
+                
+                # Wait for send to complete
+                record_metadata = future.get(timeout=10)
+                
+                self.stats['messages_sent'] += 1
+                self.stats['bytes_sent'] += len(json.dumps(enriched_message).encode('utf-8'))
             
             return True
             
-        except KafkaError as e:
-            self.stats['messages_failed'] += 1
-            self.stats['errors'].append(str(e))
-            return False
         except Exception as e:
             self.stats['messages_failed'] += 1
             self.stats['errors'].append(str(e))
