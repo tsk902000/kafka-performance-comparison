@@ -216,8 +216,8 @@ pull_images() {
     docker pull redis:7.2-alpine
     
     # Exporters
-    docker pull sscaling/jmx-prometheus-exporter:0.17.2
-    docker pull lightbend/kafka-lag-exporter:0.8.2
+    # docker pull sscaling/jmx-prometheus-exporter:0.17.2
+    # docker pull lightbend/kafka-lag-exporter:0.8.2
     
     log "Docker images pulled successfully."
 }
