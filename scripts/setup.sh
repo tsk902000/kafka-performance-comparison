@@ -230,7 +230,20 @@ start_monitoring() {
     log "Starting monitoring stack..."
     
     cd docker/monitoring
-    docker-compose up -d
+    
+    # Detect Windows and use appropriate compose file
+    if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ -n "$WINDIR" ]]; then
+        warn "Windows detected. Using Windows-compatible monitoring stack..."
+        if [ -f docker-compose-windows.yml ]; then
+            docker-compose -f docker-compose-windows.yml up -d
+        else
+            warn "Windows-compatible compose file not found. Using standard compose with potential issues..."
+            docker-compose up -d
+        fi
+    else
+        docker-compose up -d
+    fi
+    
     cd ../..
     
     # Wait for services to be ready
@@ -241,13 +254,13 @@ start_monitoring() {
     if curl -s http://localhost:9090/api/v1/status/config > /dev/null; then
         log "Prometheus is running at http://localhost:9090"
     else
-        warn "Prometheus may not be ready yet. Check logs: docker-compose -f docker/monitoring/docker-compose.yml logs prometheus"
+        warn "Prometheus may not be ready yet. Check logs with appropriate compose file"
     fi
     
     if curl -s http://localhost:3000/api/health > /dev/null; then
         log "Grafana is running at http://localhost:3000 (admin/admin123)"
     else
-        warn "Grafana may not be ready yet. Check logs: docker-compose -f docker/monitoring/docker-compose.yml logs grafana"
+        warn "Grafana may not be ready yet. Check logs with appropriate compose file"
     fi
 }
 
@@ -323,15 +336,33 @@ display_completion() {
     echo "2. Start Redpanda environment: docker-compose -f docker/redpanda/docker-compose.yml up -d"
     echo "3. Run performance tests: ./scripts/run-comparison.sh"
     echo
+    
+    # Windows-specific instructions
+    if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ -n "$WINDIR" ]]; then
+        warn "WINDOWS USERS: If you encounter container startup issues:"
+        echo "- Use Windows-compatible monitoring: docker-compose -f docker/monitoring/docker-compose-windows.yml up -d"
+        echo "- See docs/windows-docker-fixes.md for troubleshooting"
+        echo
+    fi
+    
     info "Access points:"
     echo "- Grafana Dashboard: http://localhost:3000 (admin/admin123)"
     echo "- Prometheus: http://localhost:9090"
     echo "- Kafka UI: http://localhost:8081"
     echo "- Redpanda Console: http://localhost:8082"
     echo "- Jaeger Tracing: http://localhost:16686"
-    echo "- Kibana: http://localhost:5601"
+    
+    # Conditional access points based on OS
+    if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ -n "$WINDIR" ]]; then
+        echo "- Loki Logs: http://localhost:3100 (Windows alternative to ELK)"
+        echo "- Docker Metrics: http://localhost:9417 (Windows alternative to cAdvisor)"
+    else
+        echo "- Kibana: http://localhost:5601"
+        echo "- cAdvisor: http://localhost:8080"
+    fi
+    
     echo
-    info "For help and documentation, see: docs/README.md"
+    info "For help and documentation, see: docs/README.md and docs/windows-docker-fixes.md"
 }
 
 # Main execution

@@ -37,3 +37,6 @@ This file tracks the project's current status, including recent changes, current
 * Comprehensive comparison and reporting functionality
 * User-friendly script options for different testing scenarios
 * Complete Docker-based infrastructure ready for deployment
+
+
+[2025-08-26 15:38:16] - Fixed critical Windows Docker compatibility issues in monitoring stack. Resolved cAdvisor /dev/kmsg device mounting error and Elasticsearch rlimit permission errors that were preventing container startup.

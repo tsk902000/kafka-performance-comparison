@@ -42,3 +42,29 @@ This file records architectural and implementation decisions using a list format
 * Separate UI on port 8083 to avoid conflicts
 * Updated comparison script with apache-kafka option
 * Enhanced README with platform comparison table
+
+
+[2025-08-26 15:48:22] - Implemented comprehensive Windows Docker compatibility solution
+
+## Decision
+
+* Created dual-approach solution for Windows Docker container issues
+* Modified existing docker-compose.yml with Windows-compatible configurations
+* Created dedicated docker-compose-windows.yml for optimal Windows experience
+* Updated setup script with automatic Windows detection and appropriate configuration selection
+
+## Rationale 
+
+* Windows Docker Desktop has different container runtime requirements than Linux
+* cAdvisor and Elasticsearch require Linux-specific features not available on Windows
+* Providing both modified standard configuration and Windows-optimized alternative ensures maximum compatibility
+* Automatic detection in setup script provides seamless user experience
+
+## Implementation Details
+
+* Removed /dev/kmsg device mapping from cAdvisor (Windows incompatible)
+* Removed ulimits and bootstrap.memory_lock from Elasticsearch (requires privileged access)
+* Added Windows-specific security configurations (privileged: false, security_opt)
+* Created Windows-optimized stack with docker-exporter (replaces cAdvisor) and Loki (replaces ELK)
+* Enhanced setup script with OS detection and conditional compose file selection
+* Comprehensive documentation in docs/windows-docker-fixes.md with troubleshooting guide

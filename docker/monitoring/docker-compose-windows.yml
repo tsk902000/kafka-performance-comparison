@@ -85,19 +85,15 @@ services:
           memory: 512M
           cpus: '0.5'
 
-  node-exporter:
-    image: prom/node-exporter:v1.6.1
-    hostname: node-exporter
-    container_name: node-exporter
-    command:
-      - '--path.rootfs=/host'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-      - '--collector.systemd'
-      - '--collector.processes'
+  # Windows-compatible container monitoring alternative
+  docker-exporter:
+    image: prometheusnet/docker_exporter:latest
+    hostname: docker-exporter
+    container_name: docker-exporter
     ports:
-      - "9100:9100"
+      - "9417:9417"
     volumes:
-      - /:/host:ro,rslave
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - monitoring-network
     restart: unless-stopped
@@ -106,34 +102,6 @@ services:
         limits:
           memory: 256M
           cpus: '0.25'
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.47.2
-    hostname: cadvisor
-    container_name: cadvisor
-    ports:
-      - "8080:8080"
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
-    # Windows-specific configuration
-    privileged: false
-    security_opt:
-      - no-new-privileges:true
-    # Removed devices section for Windows compatibility
-    # devices:
-    #   - /dev/kmsg
-    networks:
-      - monitoring-network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
 
   jaeger:
     image: jaegertracing/all-in-one:1.49
@@ -158,80 +126,24 @@ services:
           memory: 1G
           cpus: '1'
 
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
-    hostname: elasticsearch
-    container_name: elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
-      - cluster.routing.allocation.disk.threshold_enabled=false
-      # Removed bootstrap.memory_lock for Windows compatibility
-      # - bootstrap.memory_lock=true
-    # Removed ulimits for Windows compatibility
-    # ulimits:
-    #   memlock:
-    #     soft: -1
-    #     hard: -1
+  # Lightweight logging solution for Windows
+  loki:
+    image: grafana/loki:2.9.0
+    hostname: loki
+    container_name: loki
     ports:
-      - "9200:9200"
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
     volumes:
-      - elasticsearch-data:/usr/share/elasticsearch/data
+      - loki-data:/loki
     networks:
       - monitoring-network
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: 4G
-          cpus: '2'
-        reservations:
-          memory: 2G
-          cpus: '1'
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.9.0
-    hostname: kibana
-    container_name: kibana
-    ports:
-      - "5601:5601"
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - xpack.security.enabled=false
-    networks:
-      - monitoring-network
-    depends_on:
-      - elasticsearch
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1'
-
-  logstash:
-    image: docker.elastic.co/logstash/logstash:8.9.0
-    hostname: logstash
-    container_name: logstash
-    ports:
-      - "5044:5044"
-      - "9600:9600"
-    volumes:
-      - ./configs/logstash/pipeline:/usr/share/logstash/pipeline
-      - ./configs/logstash/config:/usr/share/logstash/config
-    environment:
-      - "LS_JAVA_OPTS=-Xmx1g -Xms1g"
-    networks:
-      - monitoring-network
-    depends_on:
-      - elasticsearch
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1'
+          memory: 1G
+          cpus: '0.5'
 
   redis:
     image: redis:7.2-alpine
@@ -280,7 +192,7 @@ volumes:
     driver: local
   alertmanager-data:
     driver: local
-  elasticsearch-data:
+  loki-data:
     driver: local
   redis-data:
     driver: local
