@@ -1,0 +1,196 @@
+startDelaySeconds: 0
+ssl: false
+lowercaseOutputName: false
+lowercaseOutputLabelNames: false
+
+rules:
+  # Kafka Server Metrics
+  - pattern: "kafka.server<type=(.+), name=(.+)PerSec\\w*><>Count"
+    name: kafka_server_$1_$2_total
+    type: COUNTER
+    help: "Kafka server $1 $2 total count"
+
+  - pattern: "kafka.server<type=(.+), name=(.+)PerSec\\w*><>Rate"
+    name: kafka_server_$1_$2_rate
+    type: GAUGE
+    help: "Kafka server $1 $2 rate"
+
+  - pattern: "kafka.server<type=(.+), name=(.+)PerSec\\w*, topic=(.+)><>Count"
+    name: kafka_server_$1_$2_total
+    type: COUNTER
+    labels:
+      topic: "$3"
+    help: "Kafka server $1 $2 total count by topic"
+
+  - pattern: "kafka.server<type=(.+), name=(.+)PerSec\\w*, topic=(.+)><>Rate"
+    name: kafka_server_$1_$2_rate
+    type: GAUGE
+    labels:
+      topic: "$3"
+    help: "Kafka server $1 $2 rate by topic"
+
+  # Broker Topic Metrics
+  - pattern: "kafka.server<type=BrokerTopicMetrics, name=(.+), topic=(.+)><>Value"
+    name: kafka_server_broker_topic_metrics_$1
+    type: GAUGE
+    labels:
+      topic: "$2"
+    help: "Kafka broker topic metrics $1"
+
+  - pattern: "kafka.server<type=BrokerTopicMetrics, name=(.+)><>Value"
+    name: kafka_server_broker_topic_metrics_$1_total
+    type: GAUGE
+    help: "Kafka broker topic metrics $1 total"
+
+  # Request Metrics
+  - pattern: "kafka.network<type=RequestMetrics, name=(.+), request=(.+)><>Count"
+    name: kafka_network_request_metrics_$1_total
+    type: COUNTER
+    labels:
+      request: "$2"
+    help: "Kafka network request metrics $1 total"
+
+  - pattern: "kafka.network<type=RequestMetrics, name=(.+), request=(.+)><>Mean"
+    name: kafka_network_request_metrics_$1_mean
+    type: GAUGE
+    labels:
+      request: "$2"
+    help: "Kafka network request metrics $1 mean"
+
+  - pattern: "kafka.network<type=RequestMetrics, name=(.+), request=(.+)><>99thPercentile"
+    name: kafka_network_request_metrics_$1_99th_percentile
+    type: GAUGE
+    labels:
+      request: "$2"
+    help: "Kafka network request metrics $1 99th percentile"
+
+  # Log Size Metrics
+  - pattern: "kafka.log<type=Log, name=Size, topic=(.+), partition=(.+)><>Value"
+    name: kafka_log_size_bytes
+    type: GAUGE
+    labels:
+      topic: "$1"
+      partition: "$2"
+    help: "Kafka log size in bytes"
+
+  # Partition Metrics
+  - pattern: "kafka.server<type=ReplicaManager, name=(.+)><>Value"
+    name: kafka_server_replica_manager_$1
+    type: GAUGE
+    help: "Kafka replica manager $1"
+
+  - pattern: "kafka.server<type=ReplicaFetcherManager, name=(.+), clientId=(.+)><>Value"
+    name: kafka_server_replica_fetcher_manager_$1
+    type: GAUGE
+    labels:
+      client_id: "$2"
+    help: "Kafka replica fetcher manager $1"
+
+  # Controller Metrics
+  - pattern: "kafka.controller<type=KafkaController, name=(.+)><>Value"
+    name: kafka_controller_$1
+    type: GAUGE
+    help: "Kafka controller $1"
+
+  - pattern: "kafka.controller<type=ControllerStats, name=(.+)><>Count"
+    name: kafka_controller_stats_$1_total
+    type: COUNTER
+    help: "Kafka controller stats $1 total"
+
+  # JVM Metrics
+  - pattern: "java.lang<type=Memory><HeapMemoryUsage>used"
+    name: jvm_memory_heap_used_bytes
+    type: GAUGE
+    help: "JVM heap memory used"
+
+  - pattern: "java.lang<type=Memory><HeapMemoryUsage>max"
+    name: jvm_memory_heap_max_bytes
+    type: GAUGE
+    help: "JVM heap memory max"
+
+  - pattern: "java.lang<type=Memory><NonHeapMemoryUsage>used"
+    name: jvm_memory_nonheap_used_bytes
+    type: GAUGE
+    help: "JVM non-heap memory used"
+
+  - pattern: "java.lang<type=GarbageCollector, name=(.+)><>CollectionCount"
+    name: jvm_gc_collection_count_total
+    type: COUNTER
+    labels:
+      gc: "$1"
+    help: "JVM garbage collection count"
+
+  - pattern: "java.lang<type=GarbageCollector, name=(.+)><>CollectionTime"
+    name: jvm_gc_collection_time_seconds_total
+    type: COUNTER
+    labels:
+      gc: "$1"
+    help: "JVM garbage collection time"
+
+  # Thread Metrics
+  - pattern: "java.lang<type=Threading><>ThreadCount"
+    name: jvm_threads_current
+    type: GAUGE
+    help: "JVM current thread count"
+
+  - pattern: "java.lang<type=Threading><>PeakThreadCount"
+    name: jvm_threads_peak
+    type: GAUGE
+    help: "JVM peak thread count"
+
+  # Operating System Metrics
+  - pattern: "java.lang<type=OperatingSystem><>ProcessCpuLoad"
+    name: jvm_process_cpu_load
+    type: GAUGE
+    help: "JVM process CPU load"
+
+  - pattern: "java.lang<type=OperatingSystem><>SystemCpuLoad"
+    name: jvm_system_cpu_load
+    type: GAUGE
+    help: "JVM system CPU load"
+
+  # Consumer Group Metrics
+  - pattern: "kafka.server<type=GroupMetadataManager, name=(.+)><>Value"
+    name: kafka_server_group_metadata_manager_$1
+    type: GAUGE
+    help: "Kafka group metadata manager $1"
+
+  # Zookeeper Metrics
+  - pattern: "kafka.server<type=SessionExpireListener, name=(.+)><>Count"
+    name: kafka_server_zookeeper_$1_total
+    type: COUNTER
+    help: "Kafka Zookeeper $1 total"
+
+  # Network Processor Metrics
+  - pattern: "kafka.network<type=Processor, name=(.+), networkProcessor=(.+)><>Value"
+    name: kafka_network_processor_$1
+    type: GAUGE
+    labels:
+      processor: "$2"
+    help: "Kafka network processor $1"
+
+  # Socket Server Metrics
+  - pattern: "kafka.network<type=SocketServer, name=(.+)><>Value"
+    name: kafka_network_socket_server_$1
+    type: GAUGE
+    help: "Kafka socket server $1"
+
+  # Quota Metrics
+  - pattern: "kafka.server<type=ClientQuotaManager, name=(.+), user=(.+), client-id=(.+)><>Value"
+    name: kafka_server_quota_$1
+    type: GAUGE
+    labels:
+      user: "$2"
+      client_id: "$3"
+    help: "Kafka client quota $1"
+
+  # Generic catch-all for other metrics
+  - pattern: "kafka.(.+)<type=(.+), name=(.+)><>Value"
+    name: kafka_$1_$2_$3
+    type: GAUGE
+    help: "Kafka $1 $2 $3"
+
+  - pattern: "kafka.(.+)<type=(.+), name=(.+)><>Count"
+    name: kafka_$1_$2_$3_total
+    type: COUNTER
+    help: "Kafka $1 $2 $3 total"

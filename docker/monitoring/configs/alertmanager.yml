@@ -1,0 +1,128 @@
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@kafka-performance-comparison.local'
+  smtp_auth_username: 'alerts@kafka-performance-comparison.local'
+  smtp_auth_password: 'password'
+
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'web.hook'
+  routes:
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 5s
+      repeat_interval: 30m
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 30s
+      repeat_interval: 2h
+    - match:
+        service: kafka
+      receiver: 'kafka-alerts'
+    - match:
+        service: redpanda
+      receiver: 'redpanda-alerts'
+    - match:
+        service: performance
+      receiver: 'performance-alerts'
+
+receivers:
+  - name: 'web.hook'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook'
+        send_resolved: true
+
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'admin@kafka-performance-comparison.local'
+        subject: 'CRITICAL: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          Severity: {{ .Labels.severity }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+    slack_configs:
+      - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+        channel: '#critical-alerts'
+        title: 'Critical Performance Alert'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Instance:* {{ .Labels.instance }}
+          *Severity:* {{ .Labels.severity }}
+          {{ end }}
+
+  - name: 'warning-alerts'
+    email_configs:
+      - to: 'team@kafka-performance-comparison.local'
+        subject: 'WARNING: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          Severity: {{ .Labels.severity }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+
+  - name: 'kafka-alerts'
+    webhook_configs:
+      - url: 'http://performance-analyzer:8090/alerts/kafka'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: 'alert_user'
+            password: 'alert_password'
+
+  - name: 'redpanda-alerts'
+    webhook_configs:
+      - url: 'http://performance-analyzer:8090/alerts/redpanda'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: 'alert_user'
+            password: 'alert_password'
+
+  - name: 'performance-alerts'
+    webhook_configs:
+      - url: 'http://performance-analyzer:8090/alerts/performance'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: 'alert_user'
+            password: 'alert_password'
+    email_configs:
+      - to: 'performance-team@kafka-performance-comparison.local'
+        subject: 'Performance Alert: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        body: |
+          Performance Alert Details:
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Severity: {{ .Labels.severity }}
+          Started: {{ .StartsAt }}
+          {{ if .EndsAt }}Ended: {{ .EndsAt }}{{ end }}
+          
+          {{ end }}
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']
+
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
