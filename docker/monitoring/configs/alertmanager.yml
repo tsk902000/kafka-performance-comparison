@@ -49,17 +49,17 @@ receivers:
           Severity: {{ .Labels.severity }}
           Time: {{ .StartsAt }}
           {{ end }}
-    slack_configs:
-      - api_url: 'YOUR_SLACK_WEBHOOK_URL'
-        channel: '#critical-alerts'
-        title: 'Critical Performance Alert'
-        text: |
-          {{ range .Alerts }}
-          *Alert:* {{ .Annotations.summary }}
-          *Description:* {{ .Annotations.description }}
-          *Instance:* {{ .Labels.instance }}
-          *Severity:* {{ .Labels.severity }}
-          {{ end }}
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    #     channel: '#critical-alerts'
+    #     title: 'Critical Performance Alert'
+    #     text: |
+    #       {{ range .Alerts }}
+    #       *Alert:* {{ .Annotations.summary }}
+    #       *Description:* {{ .Annotations.description }}
+    #       *Instance:* {{ .Labels.instance }}
+    #       *Severity:* {{ .Labels.severity }}
+    #       {{ end }}
 
   - name: 'warning-alerts'
     email_configs:

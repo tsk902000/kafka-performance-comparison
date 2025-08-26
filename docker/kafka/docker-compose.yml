@@ -210,7 +210,7 @@ services:
           cpus: '2'
 
   kafka-jmx-exporter:
-    image: sscaling/jmx-prometheus-exporter:0.17.2
+    image: bitnami/jmx-exporter:1.4.0
     hostname: kafka-jmx-exporter
     container_name: kafka-jmx-exporter
     depends_on:
