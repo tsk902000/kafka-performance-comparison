@@ -11,7 +11,7 @@ import uuid
 try:
     from confluent_kafka import Producer as ConfluentProducer
     from confluent_kafka import KafkaError as ConfluentKafkaError
-    CONFLUENT_KAFKA_AVAILABLE = True
+    CONFLUENT_KAFKA_AVAILABLE = False
 except ImportError:
     CONFLUENT_KAFKA_AVAILABLE = False
 
