@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 import yaml
 from pathlib import Path
 
-from performance_monitor import PerformanceMonitor
+from performance_monitor import PerformanceMonitor, DateTimeEncoder
 from kafka_producer import KafkaPerformanceProducer
 from kafka_consumer import KafkaPerformanceConsumer
 
@@ -263,7 +263,7 @@ class TestOrchestrator:
         results_file = self.results_dir / f"{platform}_{test_name}_{timestamp}.json"
         
         with open(results_file, 'w') as f:
-            json.dump(test_results, f, indent=2)
+            json.dump(test_results, f, indent=2, cls=DateTimeEncoder)
         
         # Save raw metrics
         metrics_file = self.results_dir / f"{platform}_{test_name}_{timestamp}_metrics.json"
@@ -323,7 +323,7 @@ class TestOrchestrator:
         comparison_file = self.results_dir / f"comparison_{test_name}_{timestamp}.json"
         
         with open(comparison_file, 'w') as f:
-            json.dump(comparison_results, f, indent=2)
+            json.dump(comparison_results, f, indent=2, cls=DateTimeEncoder)
         
         print(f"\nComparison test completed. Results saved to {comparison_file}")
         return comparison_results
