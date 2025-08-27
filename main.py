@@ -21,8 +21,8 @@ def cli():
 
 
 @cli.command()
-@click.option('--platform', type=click.Choice(['kafka', 'redpanda']), required=True,
-              help='Platform to test (kafka or redpanda)')
+@click.option('--platform', type=click.Choice(['kafka', 'kafka-kraft', 'redpanda']), required=True,
+              help='Platform to test (kafka, kafka-kraft, or redpanda)')
 @click.option('--test', type=click.Choice(['light_load', 'medium_load', 'heavy_load']), 
               default='medium_load', help='Test configuration to run')
 @click.option('--duration', type=int, help='Test duration in seconds (overrides test config)')
@@ -124,6 +124,77 @@ def compare(test, duration, messages_per_second, message_size, threads, generate
 
 
 @cli.command()
+@click.option('--test', type=click.Choice(['light_load', 'medium_load', 'heavy_load']), 
+              default='medium_load', help='Test configuration to run')
+@click.option('--duration', type=int, help='Test duration in seconds (overrides test config)')
+@click.option('--messages-per-second', type=int, help='Messages per second (overrides test config)')
+@click.option('--message-size', type=int, help='Message size in bytes (overrides test config)')
+@click.option('--threads', type=int, help='Number of producer threads (overrides test config)')
+@click.option('--generate-report', is_flag=True, help='Generate HTML report after comparison')
+@click.option('--generate-charts', is_flag=True, help='Generate performance charts')
+def three_way_compare(test, duration, messages_per_second, message_size, threads, generate_report, generate_charts):
+    """Run three-way comparison test between Kafka (Zookeeper), Kafka KRaft, and Redpanda."""
+    
+    orchestrator = TestOrchestrator()
+    
+    # Build custom config from CLI options
+    custom_config = {}
+    if duration:
+        custom_config['duration_seconds'] = duration
+    if messages_per_second:
+        custom_config['messages_per_second'] = messages_per_second
+    if message_size:
+        custom_config['message_size_bytes'] = message_size
+    if threads:
+        custom_config['num_producer_threads'] = threads
+    
+    try:
+        # Run three-way comparison test
+        results = orchestrator.run_three_way_comparison_test(test, custom_config)
+        
+        # Generate report
+        report_gen = ReportGenerator()
+        
+        # Print summary for each platform
+        click.echo(f"\n{'='*60}")
+        click.echo(f"THREE-WAY COMPARISON RESULTS: {test}")
+        click.echo(f"{'='*60}")
+        
+        # Print individual platform results
+        for platform in ['kafka', 'kafka_kraft', 'redpanda']:
+            platform_results = results.get(f'{platform}_results', {})
+            if 'producer_stats' in platform_results:
+                stats = platform_results['producer_stats']
+                click.echo(f"\n{platform.upper().replace('_', ' ')}:")
+                click.echo(f"  Messages sent: {stats.get('messages_sent', 0)}")
+                click.echo(f"  Average throughput: {stats.get('average_throughput', 0):.2f} msg/s")
+                click.echo(f"  Average bandwidth: {stats.get('average_bandwidth_mbps', 0):.2f} MB/s")
+        
+        # Print comparison winners
+        comparison = results.get('comparison', {})
+        if 'producer' in comparison:
+            producer_comp = comparison['producer']
+            if 'throughput' in producer_comp:
+                click.echo(f"\nThroughput Winner: {producer_comp['throughput']['winner'].upper().replace('_', ' ')}")
+                kraft_improvement = producer_comp['throughput'].get('kraft_vs_zookeeper_improvement', 0)
+                if kraft_improvement != 0:
+                    click.echo(f"KRaft vs Zookeeper improvement: {kraft_improvement:.1f}%")
+        
+        if generate_report:
+            # For now, use the existing report generator with kafka vs redpanda
+            # TODO: Extend report generator to support three-way comparison
+            click.echo(f"\nThree-way HTML report generation not yet implemented")
+        
+        if generate_charts:
+            # TODO: Extend chart generation for three-way comparison
+            click.echo(f"\nThree-way chart generation not yet implemented")
+        
+    except Exception as e:
+        click.echo(f"Three-way comparison test failed: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
 @click.option('--generate-report', is_flag=True, help='Generate HTML report after all tests')
 @click.option('--generate-charts', is_flag=True, help='Generate performance charts')
 def all(generate_report, generate_charts):
@@ -159,9 +230,9 @@ def all(generate_report, generate_charts):
 
 
 @cli.command()
-@click.argument('platform', type=click.Choice(['kafka', 'redpanda']))
+@click.argument('platform', type=click.Choice(['kafka', 'kafka-kraft', 'redpanda']))
 def start(platform):
-    """Start Kafka or Redpanda platform."""
+    """Start Kafka, Kafka KRaft, or Redpanda platform."""
     
     orchestrator = TestOrchestrator()
     
@@ -177,9 +248,9 @@ def start(platform):
 
 
 @cli.command()
-@click.argument('platform', type=click.Choice(['kafka', 'redpanda']))
+@click.argument('platform', type=click.Choice(['kafka', 'kafka-kraft', 'redpanda']))
 def stop(platform):
-    """Stop Kafka or Redpanda platform."""
+    """Stop Kafka, Kafka KRaft, or Redpanda platform."""
     
     orchestrator = TestOrchestrator()
     
