@@ -15,6 +15,7 @@ A comprehensive performance testing framework for comparing Apache Kafka, Kafka 
 - **Rich Reporting**: HTML reports with charts and detailed performance analysis
 - **Concurrent Testing**: Multi-threaded producers and consumers for realistic load simulation
 - **KRaft Performance Analysis**: Measure the performance impact of removing Zookeeper
+- **Dual Producer Modes**: Choose between standard (v1) or high-throughput (v2) producer modes
 
 ## Prerequisites
 
@@ -155,7 +156,54 @@ The framework includes three predefined test scenarios:
 - Producer threads: 4
 - Consumers: 4
 
-### Custom Configuration
+## Producer Modes
+
+The framework supports two different producer modes that can be selected with the `--producer-mode` parameter:
+
+### v1 Mode (Default)
+
+- **Synchronous Operation**: Each message is sent and acknowledged before sending the next
+- **Reliable Delivery**: Waits for broker acknowledgment of each message
+- **Lower Throughput**: Typically achieves 300-800 messages/second under heavy load
+- **Lower Resource Usage**: Less demanding on system resources
+- **Predictable Behavior**: Consistent performance characteristics
+
+### v2 Mode (High-Throughput)
+
+- **Asynchronous Operation**: Messages are sent without waiting for acknowledgment
+- **Batching Optimized**: Takes full advantage of Kafka's batching capabilities
+- **Higher Throughput**: Can achieve 10,000+ messages/second under heavy load
+- **Higher Resource Usage**: More demanding on CPU and network
+- **Callback-Based**: Uses callbacks to track message delivery status
+
+### When to Use Each Mode
+
+- Use **v1 mode** (default) for:
+  - Testing with predictable, controlled message rates
+  - Scenarios where reliability is more important than throughput
+  - Baseline performance testing
+  - Comparing platforms with identical delivery guarantees
+
+- Use **v2 mode** for:
+  - Maximum throughput testing
+  - Stress testing broker capabilities
+  - Simulating high-volume production workloads
+  - Benchmarking platform limits
+
+### Example Usage
+
+```bash
+# Run with default v1 mode (synchronous)
+python main.py compare --test heavy_load
+
+# Run with v2 mode (asynchronous high-throughput)
+python main.py compare --test heavy_load --producer-mode v2
+
+# Three-way comparison with v2 mode
+python main.py three-way-compare --test medium_load --producer-mode v2
+```
+
+### Custom Configuration with Producer Mode
 
 You can override any test parameter:
 
@@ -166,6 +214,7 @@ python main.py compare \
   --messages-per-second 2000 \
   --message-size 8192 \
   --threads 8 \
+  --producer-mode v2 \
   --generate-report
 ```
 

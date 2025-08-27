@@ -26,9 +26,19 @@ except ImportError:
 class KafkaPerformanceProducer:
     """High-performance Kafka producer for testing."""
     
-    def __init__(self, bootstrap_servers: str, topic: str, **producer_config):
+    def __init__(self, bootstrap_servers: str, topic: str, mode: str = "v1", **producer_config):
+        """
+        Initialize the Kafka producer.
+        
+        Args:
+            bootstrap_servers: Kafka broker addresses
+            topic: Topic to produce messages to
+            mode: "v1" for synchronous (original) mode, "v2" for asynchronous (high-throughput) mode
+            **producer_config: Additional producer configuration
+        """
         self.bootstrap_servers = bootstrap_servers
         self.topic = topic
+        self.mode = mode
         
         # Determine which Kafka client to use
         if CONFLUENT_KAFKA_AVAILABLE:
@@ -110,15 +120,27 @@ class KafkaPerformanceProducer:
             if self.client_type == 'confluent':
                 # Confluent Kafka producer
                 message_json = json.dumps(enriched_message)
-                self.producer.produce(
-                    self.topic, 
-                    value=message_json.encode('utf-8'),
-                    key=key.encode('utf-8') if key else None
-                )
-                self.producer.flush()  # Wait for message to be sent
+                message_bytes = message_json.encode('utf-8')
+                key_bytes = key.encode('utf-8') if key else None
                 
-                self.stats['messages_sent'] += 1
-                self.stats['bytes_sent'] += len(message_json.encode('utf-8'))
+                # Produce the message
+                self.producer.produce(
+                    self.topic,
+                    value=message_bytes,
+                    key=key_bytes,
+                    callback=self._delivery_callback if self.mode == "v2" else None
+                )
+                
+                # In v1 mode, flush after each message (synchronous)
+                # In v2 mode, don't flush (asynchronous)
+                if self.mode == "v1":
+                    self.producer.flush()
+                    self.stats['messages_sent'] += 1
+                    self.stats['bytes_sent'] += len(message_bytes)
+                else:
+                    # In v2 mode, we'll count messages in the callback
+                    # But we still track bytes here for accurate bandwidth calculation
+                    self.stats['bytes_sent'] += len(message_bytes)
                 
             else:  # kafka-python
                 future = self.producer.send(
@@ -127,11 +149,20 @@ class KafkaPerformanceProducer:
                     key=key
                 )
                 
-                # Wait for send to complete
-                record_metadata = future.get(timeout=10)
-                
-                self.stats['messages_sent'] += 1
-                self.stats['bytes_sent'] += len(json.dumps(enriched_message).encode('utf-8'))
+                # In v1 mode, wait for send to complete (synchronous)
+                # In v2 mode, don't wait (asynchronous)
+                if self.mode == "v1":
+                    record_metadata = future.get(timeout=10)
+                    self.stats['messages_sent'] += 1
+                    self.stats['bytes_sent'] += len(json.dumps(enriched_message).encode('utf-8'))
+                else:
+                    # For v2 mode with kafka-python, we add a callback
+                    message_bytes = json.dumps(enriched_message).encode('utf-8')
+                    self.stats['bytes_sent'] += len(message_bytes)
+                    
+                    # Add callback for asynchronous tracking
+                    future.add_callback(self._kafka_python_callback)
+                    future.add_errback(self._kafka_python_errback)
             
             return True
             
@@ -139,6 +170,23 @@ class KafkaPerformanceProducer:
             self.stats['messages_failed'] += 1
             self.stats['errors'].append(str(e))
             return False
+    
+    def _delivery_callback(self, err, msg):
+        """Callback for confluent-kafka producer in v2 mode."""
+        if err:
+            self.stats['messages_failed'] += 1
+            self.stats['errors'].append(str(err))
+        else:
+            self.stats['messages_sent'] += 1
+    
+    def _kafka_python_callback(self, record_metadata):
+        """Success callback for kafka-python producer in v2 mode."""
+        self.stats['messages_sent'] += 1
+    
+    def _kafka_python_errback(self, excp):
+        """Error callback for kafka-python producer in v2 mode."""
+        self.stats['messages_failed'] += 1
+        self.stats['errors'].append(str(excp))
     
     def send_batch(self, messages: List[Dict], keys: Optional[List[str]] = None) -> int:
         """Send a batch of messages."""
@@ -155,14 +203,20 @@ class KafkaPerformanceProducer:
         
         return sent_count
     
-    def run_load_test(self, 
+    def run_load_test(self,
                      duration_seconds: int,
                      messages_per_second: int,
                      message_size_bytes: int = 1024,
                      num_threads: int = 1,
-                     progress_callback: Optional[Callable] = None) -> Dict:
+                     progress_callback: Optional[Callable] = None,
+                     mode: Optional[str] = None) -> Dict:
         """Run a load test for specified duration."""
         
+        # If mode is provided, temporarily override the instance mode for this test
+        original_mode = self.mode
+        if mode is not None:
+            self.mode = mode
+            
         self.stats = {
             'messages_sent': 0,
             'messages_failed': 0,
@@ -170,7 +224,8 @@ class KafkaPerformanceProducer:
             'start_time': datetime.now(),
             'end_time': None,
             'errors': [],
-            'throughput_history': []
+            'throughput_history': [],
+            'mode': self.mode  # Track which mode was used
         }
         
         self.running = True
@@ -233,7 +288,15 @@ class KafkaPerformanceProducer:
         for thread in threads:
             thread.join(timeout=5)
         
+        # For v2 mode, flush any remaining messages before calculating stats
+        if self.mode == "v2" and self.producer:
+            self.producer.flush()
+            
         self.stats['end_time'] = datetime.now()
+        
+        # Restore original mode if it was temporarily overridden
+        if mode is not None:
+            self.mode = original_mode
         
         # Calculate final statistics
         total_duration = (self.stats['end_time'] - self.stats['start_time']).total_seconds()

@@ -20,10 +20,18 @@ from kafka_consumer import KafkaPerformanceConsumer
 class TestOrchestrator:
     """Orchestrates performance tests for Kafka and Redpanda."""
     
-    def __init__(self, project_dir: str = "."):
+    def __init__(self, project_dir: str = ".", producer_mode: str = "v1"):
+        """
+        Initialize the test orchestrator.
+        
+        Args:
+            project_dir: Project directory path
+            producer_mode: Producer mode - "v1" for synchronous (original) or "v2" for asynchronous (high-throughput)
+        """
         self.project_dir = Path(project_dir)
         self.results_dir = self.project_dir / "results"
         self.results_dir.mkdir(exist_ok=True)
+        self.producer_mode = producer_mode
         
         self.kafka_config = {
             'bootstrap_servers': 'localhost:9092',
@@ -210,10 +218,11 @@ class TestOrchestrator:
         
         raise Exception(f"{platform} failed to start within {max_wait} seconds")
     
-    def run_single_test(self, 
-                       platform: str, 
-                       test_name: str, 
-                       custom_config: Optional[Dict] = None) -> Dict:
+    def run_single_test(self,
+                       platform: str,
+                       test_name: str,
+                       custom_config: Optional[Dict] = None,
+                       producer_mode: Optional[str] = None) -> Dict:
         """Run a single performance test."""
         
         if platform == 'kafka':
@@ -225,11 +234,14 @@ class TestOrchestrator:
         else:
             raise ValueError(f"Unknown platform: {platform}")
         
+        # Use provided producer_mode or fall back to instance default
+        mode = producer_mode if producer_mode is not None else self.producer_mode
+        
         test_config = self.test_configs.get(test_name, {})
         if custom_config:
             test_config.update(custom_config)
         
-        print(f"\nRunning {test_name} test on {platform}")
+        print(f"\nRunning {test_name} test on {platform} with producer mode {mode}")
         print(f"Configuration: {test_config}")
         
         # Create unique topic for this test
@@ -284,10 +296,11 @@ class TestOrchestrator:
             # Wait a moment for consumers to be ready
             time.sleep(2)
             
-            # Start producer
+            # Start producer with the specified mode
             producer = KafkaPerformanceProducer(
                 bootstrap_servers=config['bootstrap_servers'],
-                topic=topic
+                topic=topic,
+                mode=mode
             )
             
             if producer.connect():
@@ -338,7 +351,7 @@ class TestOrchestrator:
         print(f"Test completed. Results saved to {results_file}")
         return test_results
     
-    def run_comparison_test(self, test_name: str, custom_config: Optional[Dict] = None) -> Dict:
+    def run_comparison_test(self, test_name: str, custom_config: Optional[Dict] = None, producer_mode: Optional[str] = None) -> Dict:
         """Run the same test on both Kafka and Redpanda for comparison."""
         
         print(f"\n{'='*60}")
@@ -353,11 +366,14 @@ class TestOrchestrator:
             'comparison': {}
         }
         
+        # Use provided producer_mode or fall back to instance default
+        mode = producer_mode if producer_mode is not None else self.producer_mode
+        
         # Test Kafka
-        print(f"\n{'-'*30} KAFKA TEST {'-'*30}")
+        print(f"\n{'-'*30} KAFKA TEST (Mode: {mode}) {'-'*30}")
         try:
             if self.start_platform('kafka'):
-                kafka_results = self.run_single_test('kafka', test_name, custom_config)
+                kafka_results = self.run_single_test('kafka', test_name, custom_config, mode)
                 comparison_results['kafka_results'] = kafka_results
             else:
                 comparison_results['kafka_results'] = {'error': 'Failed to start Kafka'}
@@ -366,10 +382,10 @@ class TestOrchestrator:
             time.sleep(5)  # Wait between tests
         
         # Test Redpanda
-        print(f"\n{'-'*30} REDPANDA TEST {'-'*30}")
+        print(f"\n{'-'*30} REDPANDA TEST (Mode: {mode}) {'-'*30}")
         try:
             if self.start_platform('redpanda'):
-                redpanda_results = self.run_single_test('redpanda', test_name, custom_config)
+                redpanda_results = self.run_single_test('redpanda', test_name, custom_config, mode)
                 comparison_results['redpanda_results'] = redpanda_results
             else:
                 comparison_results['redpanda_results'] = {'error': 'Failed to start Redpanda'}
@@ -394,7 +410,7 @@ class TestOrchestrator:
         print(f"\nComparison test completed. Results saved to {comparison_file}")
         return comparison_results
     
-    def run_three_way_comparison_test(self, test_name: str, custom_config: Optional[Dict] = None) -> Dict:
+    def run_three_way_comparison_test(self, test_name: str, custom_config: Optional[Dict] = None, producer_mode: Optional[str] = None) -> Dict:
         """Run the same test on Kafka, Kafka KRaft, and Redpanda for comparison."""
         
         print(f"\n{'='*60}")
@@ -410,11 +426,14 @@ class TestOrchestrator:
             'comparison': {}
         }
         
+        # Use provided producer_mode or fall back to instance default
+        mode = producer_mode if producer_mode is not None else self.producer_mode
+        
         # Test Kafka (with Zookeeper)
-        print(f"\n{'-'*30} KAFKA (ZOOKEEPER) TEST {'-'*30}")
+        print(f"\n{'-'*30} KAFKA (ZOOKEEPER) TEST (Mode: {mode}) {'-'*30}")
         try:
             if self.start_platform('kafka'):
-                kafka_results = self.run_single_test('kafka', test_name, custom_config)
+                kafka_results = self.run_single_test('kafka', test_name, custom_config, mode)
                 comparison_results['kafka_results'] = kafka_results
             else:
                 comparison_results['kafka_results'] = {'error': 'Failed to start Kafka'}
@@ -423,10 +442,10 @@ class TestOrchestrator:
             time.sleep(5)  # Wait between tests
         
         # Test Kafka KRaft (without Zookeeper)
-        print(f"\n{'-'*30} KAFKA KRAFT TEST {'-'*30}")
+        print(f"\n{'-'*30} KAFKA KRAFT TEST (Mode: {mode}) {'-'*30}")
         try:
             if self.start_platform('kafka-kraft'):
-                kafka_kraft_results = self.run_single_test('kafka-kraft', test_name, custom_config)
+                kafka_kraft_results = self.run_single_test('kafka-kraft', test_name, custom_config, mode)
                 comparison_results['kafka_kraft_results'] = kafka_kraft_results
             else:
                 comparison_results['kafka_kraft_results'] = {'error': 'Failed to start Kafka KRaft'}
@@ -435,10 +454,10 @@ class TestOrchestrator:
             time.sleep(5)  # Wait between tests
         
         # Test Redpanda
-        print(f"\n{'-'*30} REDPANDA TEST {'-'*30}")
+        print(f"\n{'-'*30} REDPANDA TEST (Mode: {mode}) {'-'*30}")
         try:
             if self.start_platform('redpanda'):
-                redpanda_results = self.run_single_test('redpanda', test_name, custom_config)
+                redpanda_results = self.run_single_test('redpanda', test_name, custom_config, mode)
                 comparison_results['redpanda_results'] = redpanda_results
             else:
                 comparison_results['redpanda_results'] = {'error': 'Failed to start Redpanda'}
@@ -654,13 +673,13 @@ class TestOrchestrator:
         
         return comparison
     
-    def run_all_tests(self) -> List[Dict]:
+    def run_all_tests(self, producer_mode: Optional[str] = None) -> List[Dict]:
         """Run all predefined tests for comparison."""
         results = []
         
         for test_name in self.test_configs.keys():
             try:
-                result = self.run_comparison_test(test_name)
+                result = self.run_comparison_test(test_name, producer_mode=producer_mode)
                 results.append(result)
             except Exception as e:
                 print(f"Failed to run test {test_name}: {e}")

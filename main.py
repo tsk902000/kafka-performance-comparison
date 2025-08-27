@@ -29,10 +29,12 @@ def cli():
 @click.option('--messages-per-second', type=int, help='Messages per second (overrides test config)')
 @click.option('--message-size', type=int, help='Message size in bytes (overrides test config)')
 @click.option('--threads', type=int, help='Number of producer threads (overrides test config)')
-def single(platform, test, duration, messages_per_second, message_size, threads):
+@click.option('--producer-mode', type=click.Choice(['v1', 'v2']), default='v1',
+              help='Producer mode: v1 (synchronous/original) or v2 (asynchronous/high-throughput)')
+def single(platform, test, duration, messages_per_second, message_size, threads, producer_mode):
     """Run a single platform test."""
     
-    orchestrator = TestOrchestrator()
+    orchestrator = TestOrchestrator(producer_mode=producer_mode)
     
     # Build custom config from CLI options
     custom_config = {}
@@ -81,12 +83,14 @@ def single(platform, test, duration, messages_per_second, message_size, threads)
 @click.option('--messages-per-second', type=int, help='Messages per second (overrides test config)')
 @click.option('--message-size', type=int, help='Message size in bytes (overrides test config)')
 @click.option('--threads', type=int, help='Number of producer threads (overrides test config)')
+@click.option('--producer-mode', type=click.Choice(['v1', 'v2']), default='v1',
+              help='Producer mode: v1 (synchronous/original) or v2 (asynchronous/high-throughput)')
 @click.option('--generate-report', is_flag=True, help='Generate HTML report after comparison')
 @click.option('--generate-charts', is_flag=True, help='Generate performance charts')
-def compare(test, duration, messages_per_second, message_size, threads, generate_report, generate_charts):
+def compare(test, duration, messages_per_second, message_size, threads, producer_mode, generate_report, generate_charts):
     """Run comparison test between Kafka and Redpanda."""
     
-    orchestrator = TestOrchestrator()
+    orchestrator = TestOrchestrator(producer_mode=producer_mode)
     
     # Build custom config from CLI options
     custom_config = {}
@@ -101,7 +105,7 @@ def compare(test, duration, messages_per_second, message_size, threads, generate
     
     try:
         # Run comparison test
-        results = orchestrator.run_comparison_test(test, custom_config)
+        results = orchestrator.run_comparison_test(test, custom_config, producer_mode)
         
         # Generate report
         report_gen = ReportGenerator()
@@ -130,12 +134,14 @@ def compare(test, duration, messages_per_second, message_size, threads, generate
 @click.option('--messages-per-second', type=int, help='Messages per second (overrides test config)')
 @click.option('--message-size', type=int, help='Message size in bytes (overrides test config)')
 @click.option('--threads', type=int, help='Number of producer threads (overrides test config)')
+@click.option('--producer-mode', type=click.Choice(['v1', 'v2']), default='v1',
+              help='Producer mode: v1 (synchronous/original) or v2 (asynchronous/high-throughput)')
 @click.option('--generate-report', is_flag=True, help='Generate HTML report after comparison')
 @click.option('--generate-charts', is_flag=True, help='Generate performance charts')
-def three_way_compare(test, duration, messages_per_second, message_size, threads, generate_report, generate_charts):
+def three_way_compare(test, duration, messages_per_second, message_size, threads, producer_mode, generate_report, generate_charts):
     """Run three-way comparison test between Kafka (Zookeeper), Kafka KRaft, and Redpanda."""
     
-    orchestrator = TestOrchestrator()
+    orchestrator = TestOrchestrator(producer_mode=producer_mode)
     
     # Build custom config from CLI options
     custom_config = {}
@@ -150,7 +156,7 @@ def three_way_compare(test, duration, messages_per_second, message_size, threads
     
     try:
         # Run three-way comparison test
-        results = orchestrator.run_three_way_comparison_test(test, custom_config)
+        results = orchestrator.run_three_way_comparison_test(test, custom_config, producer_mode)
         
         # Generate report
         report_gen = ReportGenerator()
@@ -195,16 +201,18 @@ def three_way_compare(test, duration, messages_per_second, message_size, threads
 
 
 @cli.command()
+@click.option('--producer-mode', type=click.Choice(['v1', 'v2']), default='v1',
+              help='Producer mode: v1 (synchronous/original) or v2 (asynchronous/high-throughput)')
 @click.option('--generate-report', is_flag=True, help='Generate HTML report after all tests')
 @click.option('--generate-charts', is_flag=True, help='Generate performance charts')
-def all(generate_report, generate_charts):
+def all(producer_mode, generate_report, generate_charts):
     """Run all predefined tests for comprehensive comparison."""
     
-    orchestrator = TestOrchestrator()
+    orchestrator = TestOrchestrator(producer_mode=producer_mode)
     report_gen = ReportGenerator()
     
     try:
-        results_list = orchestrator.run_all_tests()
+        results_list = orchestrator.run_all_tests(producer_mode)
         
         click.echo(f"\nCompleted {len(results_list)} test comparisons")
         
@@ -231,10 +239,12 @@ def all(generate_report, generate_charts):
 
 @cli.command()
 @click.argument('platform', type=click.Choice(['kafka', 'kafka-kraft', 'redpanda']))
-def start(platform):
+@click.option('--producer-mode', type=click.Choice(['v1', 'v2']), default='v1',
+              help='Producer mode: v1 (synchronous/original) or v2 (asynchronous/high-throughput)')
+def start(platform, producer_mode):
     """Start Kafka, Kafka KRaft, or Redpanda platform."""
     
-    orchestrator = TestOrchestrator()
+    orchestrator = TestOrchestrator(producer_mode=producer_mode)
     
     try:
         if orchestrator.start_platform(platform):
@@ -249,10 +259,12 @@ def start(platform):
 
 @cli.command()
 @click.argument('platform', type=click.Choice(['kafka', 'kafka-kraft', 'redpanda']))
-def stop(platform):
+@click.option('--producer-mode', type=click.Choice(['v1', 'v2']), default='v1',
+              help='Producer mode: v1 (synchronous/original) or v2 (asynchronous/high-throughput)')
+def stop(platform, producer_mode):
     """Stop Kafka, Kafka KRaft, or Redpanda platform."""
     
-    orchestrator = TestOrchestrator()
+    orchestrator = TestOrchestrator(producer_mode=producer_mode)
     
     try:
         if orchestrator.stop_platform(platform):
@@ -303,10 +315,12 @@ def report(comparison_file, output, charts):
 
 
 @cli.command()
-def list_tests():
+@click.option('--producer-mode', type=click.Choice(['v1', 'v2']), default='v1',
+              help='Producer mode: v1 (synchronous/original) or v2 (asynchronous/high-throughput)')
+def list_tests(producer_mode):
     """List available test configurations."""
     
-    orchestrator = TestOrchestrator()
+    orchestrator = TestOrchestrator(producer_mode=producer_mode)
     
     click.echo("Available test configurations:")
     click.echo("-" * 40)
