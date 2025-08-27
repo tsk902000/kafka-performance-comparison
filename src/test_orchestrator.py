@@ -70,8 +70,8 @@ class TestOrchestrator:
                 'duration_seconds': 180,
                 'messages_per_second': 50000,
                 'message_size_bytes': 4096,
-                'num_producer_threads': 4,
-                'num_consumers': 4
+                'num_producer_threads': 12,
+                'num_consumers': 6
             }
         }
     
