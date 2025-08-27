@@ -6,6 +6,7 @@ import time
 import json
 import subprocess
 import threading
+import socket
 from datetime import datetime
 from typing import Dict, List, Optional
 import yaml
@@ -135,26 +136,77 @@ class TestOrchestrator:
             bootstrap_servers = self.kafka_config['bootstrap_servers']
         elif platform == 'kafka-kraft':
             bootstrap_servers = self.kafka_kraft_config['bootstrap_servers']
+            # KRaft takes longer to initialize
+            max_wait = 120
         else:
             bootstrap_servers = self.redpanda_config['bootstrap_servers']
         
-        print(f"Waiting for {platform} to be ready...")
+        # Parse host and port from bootstrap_servers
+        host, port = bootstrap_servers.split(':')
+        port = int(port)
         
+        print(f"Waiting for {platform} to be ready on {host}:{port} (max {max_wait} seconds)...")
+        
+        # First, wait for the port to be open
+        port_open = False
         for i in range(max_wait):
-            try:
-                # Try to create a test producer to check connectivity
-                producer = KafkaPerformanceProducer(
-                    bootstrap_servers=bootstrap_servers,
-                    topic='test-connectivity'
-                )
-                if producer.connect():
-                    producer.disconnect()
-                    print(f"{platform} is ready!")
-                    return True
-            except Exception:
-                pass
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            result = sock.connect_ex((host, port))
+            sock.close()
+            
+            if result == 0:
+                if not port_open:
+                    print(f"  Port {port} is now open ({i+1} seconds)")
+                    port_open = True
+                
+                # Once port is open, try to connect with Kafka client
+                try:
+                    producer = KafkaPerformanceProducer(
+                        bootstrap_servers=bootstrap_servers,
+                        topic='test-connectivity'
+                    )
+                    if producer.connect():
+                        producer.disconnect()
+                        print(f"{platform} is ready! (took {i+1} seconds)")
+                        return True
+                except Exception as e:
+                    # After port is open, show more frequent updates
+                    if port_open and i % 5 == 0:
+                        print(f"  Port is open but Kafka not ready yet... ({i} seconds elapsed)")
+            else:
+                # Print progress every 10 seconds while waiting for port
+                if i > 0 and i % 10 == 0:
+                    print(f"  Still waiting for port {port} to open... ({i} seconds elapsed)")
             
             time.sleep(1)
+        
+        # Try to get more diagnostic information before failing
+        print(f"\nDiagnostic information for {platform}:")
+        try:
+            # Check if container is running
+            container_name = self.kafka_config['container_name'] if platform == 'kafka' else \
+                           self.kafka_kraft_config['container_name'] if platform == 'kafka-kraft' else \
+                           self.redpanda_config['container_name']
+            
+            result = subprocess.run(
+                ['docker', 'ps', '--filter', f'name={container_name}', '--format', '{{.Status}}'],
+                capture_output=True, text=True
+            )
+            if result.stdout.strip():
+                print(f"  Container status: {result.stdout.strip()}")
+            else:
+                print(f"  Container {container_name} is not running")
+            
+            # Check last few logs
+            result = subprocess.run(
+                ['docker', 'logs', '--tail', '10', container_name],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.stderr:
+                print(f"  Recent logs:\n{result.stderr[:500]}")
+        except Exception as diag_err:
+            print(f"  Could not get diagnostic info: {diag_err}")
         
         raise Exception(f"{platform} failed to start within {max_wait} seconds")
     

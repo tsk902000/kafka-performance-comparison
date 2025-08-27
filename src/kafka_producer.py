@@ -73,8 +73,15 @@ class KafkaPerformanceProducer:
         try:
             if self.client_type == 'confluent':
                 self.producer = ConfluentProducer(self.producer_config)
+                # Verify connection by requesting metadata
+                metadata = self.producer.list_topics(timeout=5)
+                if not metadata.brokers:
+                    raise Exception("No brokers available")
             else:  # kafka-python
                 self.producer = KafkaProducer(**self.producer_config)
+                # For kafka-python, the connection is established lazily
+                # Force a metadata refresh to verify connectivity
+                _ = self.producer.bootstrap_connected()
             return True
         except Exception as e:
             print(f"Failed to connect to Kafka: {e}")
