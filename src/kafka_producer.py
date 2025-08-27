@@ -62,7 +62,6 @@ class KafkaPerformanceProducer:
                 'batch_size': 65536,
                 'linger_ms': 50,
                 'buffer_memory': 33554432,
-                'compression.type': 'lz4',
                 **producer_config
             }
         else:
