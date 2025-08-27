@@ -57,7 +57,7 @@ class KafkaPerformanceProducer:
                 'bootstrap_servers': bootstrap_servers,
                 'value_serializer': lambda v: json.dumps(v).encode('utf-8'),
                 'key_serializer': lambda k: str(k).encode('utf-8') if k else None,
-                'acks': '1',
+                'acks': 'all',
                 'retries': 3,
                 'batch_size': 65536,
                 'linger_ms': 50,
