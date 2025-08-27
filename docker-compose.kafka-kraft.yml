@@ -75,7 +75,7 @@ services:
       - kafka-kraft-logs:/var/lib/kafka/logs
 
     healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9093 || exit 1"]
+      test: ["CMD-SHELL","bash -c 'echo > /dev/tcp/localhost/9092'"]
       interval: 30s
       timeout: 15s
       retries: 5
