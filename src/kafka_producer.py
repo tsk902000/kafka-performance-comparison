@@ -57,11 +57,12 @@ class KafkaPerformanceProducer:
                 'bootstrap_servers': bootstrap_servers,
                 'value_serializer': lambda v: json.dumps(v).encode('utf-8'),
                 'key_serializer': lambda k: str(k).encode('utf-8') if k else None,
-                'acks': 'all',
+                'acks': '1',
                 'retries': 3,
-                'batch_size': 16384,
-                'linger_ms': 10,
+                'batch_size': 65536,
+                'linger_ms': 50,
                 'buffer_memory': 33554432,
+                'compression.type': 'lz4',
                 **producer_config
             }
         else:
