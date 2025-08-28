@@ -8,6 +8,14 @@ from typing import Dict, List, Optional
 import docker
 
 
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles datetime objects."""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+
 class PerformanceMonitor:
     """Monitor system and container performance metrics."""
     
@@ -98,7 +106,11 @@ class PerformanceMonitor:
                        stats['precpu_stats']['cpu_usage']['total_usage']
             system_delta = stats['cpu_stats']['system_cpu_usage'] - \
                           stats['precpu_stats']['system_cpu_usage']
-            cpu_percent = (cpu_delta / system_delta) * len(stats['cpu_stats']['cpu_usage']['percpu_usage']) * 100.0
+            
+            # Handle missing percpu_usage field gracefully
+            percpu_usage = stats['cpu_stats']['cpu_usage'].get('percpu_usage', [])
+            num_cpus = len(percpu_usage) if percpu_usage else 1
+            cpu_percent = (cpu_delta / system_delta) * num_cpus * 100.0 if system_delta > 0 else 0.0
             
             # Memory usage
             memory_usage = stats['memory_stats']['usage']
@@ -178,6 +190,6 @@ class PerformanceMonitor:
             json.dump({
                 'metrics': self.metrics,
                 'summary': self.get_summary_stats()
-            }, f, indent=2)
+            }, f, indent=2, cls=DateTimeEncoder)
 
 
